@@ -13,15 +13,19 @@ import time
 import collections
 import json
 import DQN as DQN
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import argparse
 import copy
 from itertools import cycle
 
+start = time.process_time()
+
+
 parser = argparse.ArgumentParser(description='give test scenarios.')
 parser.add_argument("--seeds", default=[1], nargs='+', type=int)              
-parser.add_argument("--episode-timeslots", default=75000, type=int) 
-parser.add_argument("--timeslots", default=75000, type=int)   
+parser.add_argument("--episode-timeslots", default=500, type=int)   
+parser.add_argument("--timeslots", default=500, type=int)
 parser.add_argument("--mode", default="traffic")
 parser.add_argument("--reset-gains", default=True, type=bool) 
 parser.add_argument("--max-rates", default=[15], nargs='+', type=float)
@@ -34,22 +38,21 @@ parser.add_argument('--json-file-policy', type=str, default='dqn200_100_50',
 args = parser.parse_args()
 json_file_policy = args.json_file_policy
 with open ('./config/policy/'+json_file_policy+'.json','r') as f:
-    options_policy = json.load(f)   
+    options_policy = json.load(f)    
 
-if not options_policy['cuda']:
-    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-    
-    
 # set data rates
 #make simulation folder           
 if not os.path.exists("./simulations"):
     os.makedirs("./simulations")
-    
-writer=tf.summary.FileWriter('./logs', tf.get_default_graph())
+
+with tf.Graph().as_default():
+    writer=tf.summary.FileWriter('./logs')
 
 mobility_update_interval = 50 #1s
 
-   
+
+os.environ["CUDA_VISIBLE_DEVICES"] = options_policy["cuda"]
+print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
 model_save_interval = 2500
 
 pre_SINR = True
@@ -68,8 +71,8 @@ for max_rate in args.max_rates:
             os.makedirs(folder_name)
             
         
-        tf.reset_default_graph()  
-        tf.set_random_seed(100 + args.seed)
+        tf.compat.v1.reset_default_graph()  
+        tf.random.set_random_seed(100 + args.seed)
         import env
         env = env.wireless_env(N = args.N,
                             M = args.M,
@@ -269,17 +272,5 @@ for max_rate in args.max_rates:
         # np.savez(np_save_path,options_policy,throughput,p_strategy_all,user_strategy_all)
         np.savez(np_save_path,w_1_all,w_2_all,w_3_all,b_3_all,throughput,reward_all,RX_loc,utilization,time_calculating_strategy_takes,time_optimization_at_each_slot_takes)
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+print("---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+print("Time taken: "+str(time.process_time() - start) +" seconds")

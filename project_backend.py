@@ -40,10 +40,10 @@ def neural_net(x, weights, biases): # Create model
 def initial_weights (num_input, n_hidden_1, n_hidden_2, n_hidden_3, num_output, seed = None):
 
     weights = {
-        'h1': tf.Variable(tf.random_uniform([num_input, n_hidden_1], -1./np.sqrt(n_hidden_1),1./np.sqrt(n_hidden_1),seed=seed+1000)),
-        'h2': tf.Variable(tf.random_uniform([n_hidden_1, n_hidden_2], -1./ np.sqrt(n_hidden_2), 1./ np.sqrt(n_hidden_2),seed=seed+2000)),
-        'h3': tf.Variable(tf.random_uniform([n_hidden_2, n_hidden_3], -1/ np.sqrt(n_hidden_3), 1./ np.sqrt(n_hidden_3),seed=seed+3000)),
-        'out': tf.Variable(tf.random_uniform([n_hidden_3, num_output], -0.003, 0.003,seed=seed+4000)),
+        'h1': tf.Variable(tf.random.uniform([num_input, n_hidden_1], -1./np.sqrt(n_hidden_1),1./np.sqrt(n_hidden_1),seed=seed+1000)),
+        'h2': tf.Variable(tf.random.uniform([n_hidden_1, n_hidden_2], -1./ np.sqrt(n_hidden_2), 1./ np.sqrt(n_hidden_2),seed=seed+2000)),
+        'h3': tf.Variable(tf.random.uniform([n_hidden_2, n_hidden_3], -1/ np.sqrt(n_hidden_3), 1./ np.sqrt(n_hidden_3),seed=seed+3000)),
+        'out': tf.Variable(tf.random.uniform([n_hidden_3, num_output], -0.003, 0.003,seed=seed+4000)),
     }
     return weights
 
@@ -57,10 +57,10 @@ def update_weights (source_weights, destination_weights):
 
 def initial_biases (n_hidden_1, n_hidden_2, n_hidden_3, num_output, seed = None):
     biases = {
-        'b1': tf.Variable(tf.random_uniform([n_hidden_1], -1./np.sqrt(n_hidden_1),1./np.sqrt(n_hidden_1),seed=seed+5000)),
-        'b2': tf.Variable(tf.random_uniform([n_hidden_2], -1./ np.sqrt(n_hidden_2), 1./ np.sqrt(n_hidden_2),seed=seed+6000)),
-        'b3': tf.Variable(tf.random_uniform([n_hidden_3], -1/ np.sqrt(n_hidden_3), 1./ np.sqrt(n_hidden_3),seed=seed+7000)),
-        'out': tf.Variable(tf.random_uniform([num_output], -0.003, 0.003,seed=seed+8000)),
+        'b1': tf.Variable(tf.random.uniform([n_hidden_1], -1./np.sqrt(n_hidden_1),1./np.sqrt(n_hidden_1),seed=seed+5000)),
+        'b2': tf.Variable(tf.random.uniform([n_hidden_2], -1./ np.sqrt(n_hidden_2), 1./ np.sqrt(n_hidden_2),seed=seed+6000)),
+        'b3': tf.Variable(tf.random.uniform([n_hidden_3], -1/ np.sqrt(n_hidden_3), 1./ np.sqrt(n_hidden_3),seed=seed+7000)),
+        'out': tf.Variable(tf.random.uniform([num_output], -0.003, 0.003,seed=seed+8000)),
     }
     return biases
 

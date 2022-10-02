@@ -6,15 +6,17 @@ Created on Tue Jul 19 21:46:17 2022
 """
 import numpy as np
 import project_backend as pb
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import collections
 import copy
 import itertools
-
+import time
+import timeit
 
 class DQN:
     def __init__(self, args,options_policy,env):
-        tf.reset_default_graph()        
+        tf.compat.v1.reset_default_graph()        
         self.timeslots = args.timeslots
         self.train_episodes = args.episode_timeslots
         self.seed = args.seed
@@ -108,17 +110,16 @@ class DQN:
         
         # Experience replay memory
         self.memory = {}
-        self.memory['s'] = collections.deque([],self.memory_len + self.K)
-        self.memory['s_prime'] = collections.deque([],self.memory_len)
-        self.memory['rewards'] = collections.deque([],self.memory_len)
-        self.memory['actions'] = collections.deque([],self.memory_len)
-        
-        # self.memory_s = {}
-        # self.memory_s['s'] = collections.deque([],self.memory_len+self.K)
-        # self.memory_s['s_prime'] = collections.deque([],self.memory_len)
-        # self.memory_s['rewards'] = collections.deque([],self.memory_len)
-        # self.memory_s['actions'] = collections.deque([],self.memory_len)
-        
+        self.memory['s'] = np.array([])
+        self.memory['s_prime'] = np.array([])
+        self.memory['rewards'] = np.array([])
+        self.memory['actions'] = np.array([])
+
+        self.s_len = self.memory_len + self.K
+        self.s_prime_len = self.memory_len
+        self.rewards_len = self.memory_len
+        self.actions_len = self.memory_len
+
         self.previous_state = np.zeros((self.K,self.num_input))
         self.previous_action = np.ones(self.K) * self.num_actions
         
@@ -205,11 +206,16 @@ class DQN:
     def check_memory_restart(self,sess,sim):   
         if(sim %self.train_episodes == 0 and sim != 0): # Restart experience replay.
             self.memory = {}
-            self.memory['s'] = collections.deque([],self.memory_len + self.K)
-            self.memory['s_prime'] = collections.deque([],self.memory_len + self.K)
-            self.memory['rewards'] = collections.deque([],self.memory_len + self.K)
-            self.memory['actions'] = collections.deque([],self.memory_len + self.K)
-            
+            self.memory['s'] = np.array([])
+            self.memory['s_prime'] = np.array([])
+            self.memory['rewards'] = np.array([])
+            self.memory['actions'] = np.array([])
+                
+            self.s_len = self.memory_len + self.K
+            self.s_prime_len = self.memory_len + self.K
+            self.rewards_len = self.memory_len + self.K
+            self.actions_len = self.memory_len + self.K
+
             self.previous_state = np.zeros((self.K,self.num_input))
             self.previous_action = np.ones(self.K) * self.num_actions   
             
@@ -269,7 +275,6 @@ class DQN:
     def act(self,sess,current_local_state,sim,agent):
         # Current QNN outputs for all available actions
         current_QNN_outputs = sess.run(self.QNN_target, feed_dict={self.x_policy: current_local_state.reshape(1,self.num_input), self.is_train: False})
-        # print('sim{} epsilon{}'.format(self.env.t, self.epsilon_all[-1]))
         # epsilon greedy algorithm
         if np.random.rand() < self.epsilon_all[-1]:
             strategy = np.random.randint(self.num_actions)
@@ -283,25 +288,48 @@ class DQN:
         return np.argmax(current_QNN_outputs)
     
     def remember(self,agent,current_local_state,current_reward):
-        self.memory['s'].append(copy.copy(self.previous_state[agent,:]).reshape(self.num_input))
-        self.memory['actions'].append(copy.copy(self.previous_action[agent]))
-        self.memory['rewards'].append(copy.copy(current_reward))
-        self.memory['s_prime'].append(copy.copy(current_local_state))
+        im_memory_s = copy.copy(self.previous_state[agent,:]).reshape(self.num_input)
+        im_memory_actions = copy.copy(self.previous_action[agent])
+        im_memory_rewards = copy.copy(current_reward)
+        im_memory_s_prime = copy.copy(current_local_state)
+        if im_memory_s.size != 0:
+            self.memory['s'] = np.concatenate((self.memory['s'],[im_memory_s]),axis=0) if self.memory['s'].size else np.array([im_memory_s])
+        if im_memory_actions.size != 0:
+            self.memory['actions'] = np.concatenate((self.memory['actions'],[im_memory_actions]),axis=0) if self.memory['actions'].size else np.array([im_memory_actions])
+        if im_memory_rewards.size != 0:
+            self.memory['rewards'] = np.concatenate((self.memory['rewards'],[im_memory_rewards]),axis=0) if self.memory['rewards'].size else np.array([im_memory_rewards])
+        if im_memory_s_prime.size != 0:
+            self.memory['s_prime'] = np.concatenate((self.memory['s_prime'],[im_memory_s_prime]),axis=0) if self.memory['s_prime'].size else np.array([im_memory_s_prime])
+
+        if len(self.memory['s']) > self.s_len:
+            self.memory['s'] = self.memory['s'][len(self.memory['s'])-self.s_len:]
+
+        if len(self.memory['actions']) > self.actions_len:
+            self.memory['actions'] = self.memory['actions'][len(self.memory['actions'])-self.actions_len:]
+
+        if len(self.memory['rewards']) > self.rewards_len:
+            self.memory['rewards'] = self.memory['rewards'][len(self.memory['rewards'])-self.rewards_len:]
+
+        if len(self.memory['s_prime']) > self.s_prime_len:
+            self.memory['s_prime'] = self.memory['s_prime'][len(self.memory['s_prime'])-self.s_prime_len:]
 
     def train(self,sess,sim):
+        print("TRAINING HAS STARTED")
         # mod 
         if len(self.memory['s']) >= self.batch_size+self.K:
             # Minus K ensures that experience samples from previous timeslots been used, not this time slot.
-            #print(len(self.memory['rewards']))
             idx = np.random.randint(len(self.memory['rewards'])-self.K,size=self.batch_size)
-            c_QNN_outputs = sess.run(self.QNN_target, feed_dict={self.x_policy: np.array(self.memory['s_prime'])[idx, :].reshape(self.batch_size,self.num_input),
+            print("ARRAY CONVERSION TIME")
+            start_np_array = time.process_time()
+            c_QNN_outputs = sess.run(self.QNN_target, feed_dict={self.x_policy: (self.memory['s_prime'])[idx, :].reshape(self.batch_size,self.num_input),
                                                                  self.is_train: False})
-            opt_y = np.array(self.memory['rewards'])[idx].reshape(self.batch_size) + self.discount_factor * np.max(c_QNN_outputs,axis=1)
-            actions = np.array(self.memory['actions'])[idx]
+            opt_y = (self.memory['rewards'])[idx].reshape(self.batch_size) + self.discount_factor * np.max(c_QNN_outputs,axis=1)
+            actions = (self.memory['actions'])[idx]
             (tmp,tmp_mse) = sess.run([self.optimizer, self.loss], feed_dict={self.learning_rate:self.learning_rate_all[sim],self.actionslatten:actions,
-                                self.x_policy: np.array(self.memory['s'])[idx, :],
+                                self.x_policy: (self.memory['s'])[idx, :],
                                 self.y_policy: opt_y.reshape(self.batch_size,1), self.is_train: True})
-            
+            print("Numpy Conversion time: "+str(time.process_time() - start_np_array) +" seconds")
+            print("******************************************************************************")
             self.update_epsilon(reset = False)
 
     def equalize(self,sess):
@@ -319,12 +347,3 @@ class DQN:
         self.saver = tf.train.Saver(tf.global_variables())
         self.saver.restore(sess, model_destination)
         print('Model loaded from: %s' %(model_destination))
-        
-        
-        
-        
-        
-        
-        
-
-    
